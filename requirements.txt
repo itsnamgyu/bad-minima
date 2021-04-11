@@ -1,4 +1,5 @@
-torch
+pytorch
 pandas
 matplotlib
 jupyter
+torchvision
