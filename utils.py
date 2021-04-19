@@ -9,10 +9,14 @@ Current implementations: get_model, get_dataloaders, get_SGD, train, eval, plot_
 import os
 import project
 import numpy as np
+import random
 import torch
 import torch.optim as optim
 from torchvision import datasets, transforms, models
+import matplotlib
 import matplotlib.pyplot as plt
+# Non-interactive backend
+matplotlib.use('Agg')
 
 # Set directories/paths
 PROJECT_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -21,6 +25,31 @@ DATASETS_DIR = os.path.join(PROJECT_DIR, "datasets")
 _model_classes = {
     'vgg11': models.vgg11,
     'resnet18': models.resnet18,
+}
+
+_datasets = {
+    'mnist': {
+        'data_class': datasets.MNIST,
+        'stats': {
+            'mean': [0.1307],
+            'std': [0.3081]
+        },
+    },
+    'cifar10': {
+        'data_class': datasets.CIFAR10,
+        'stats': {
+            'mean': [0.491, 0.482, 0.447],
+            'std': [0.247, 0.243, 0.262]
+        }
+    },
+    'cifar100': {
+        'data_class': datasets.CIFAR100,
+        'stats': {
+            'mean': [0.5071, 0.4867, 0.4408],
+            'std': [0.2675, 0.2565, 0.2761]
+        }
+    },
+
 }
 
 
@@ -66,32 +95,6 @@ def extract_poison(train_data, num_classes, beta=0.1):
     train_data = [train_data[idx] for idx in np.delete(np.arange(n_tr), poison_idx)]
 
     return train_data, poison_data
-
-
-_datasets = {
-    'mnist': {
-        'data_class': datasets.MNIST,
-        'stats': {
-            'mean': [0.1307],
-            'std': [0.3081]
-        },
-    },
-    'cifar10': {
-        'data_class': datasets.CIFAR10,
-        'stats': {
-            'mean': [0.491, 0.482, 0.447],
-            'std': [0.247, 0.243, 0.262]
-        }
-    },
-    'cifar100': {
-        'data_class': datasets.CIFAR100,
-        'stats': {
-            'mean': [0.5071, 0.4867, 0.4408],
-            'std': [0.2675, 0.2565, 0.2761]
-        }
-    },
-
-}
 
 
 def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1):
@@ -141,9 +144,7 @@ def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1):
 
     # Obtain poisoning portion from the training data
     train_data, poison_data = extract_poison(train_data, num_classes, beta)
-    n_tr = len(train_data)
-    n_te = len(test_data)
-
+    
     train_loader = torch.utils.data.DataLoader(
         dataset=train_data,
         batch_size=batch_size,
@@ -151,16 +152,16 @@ def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1):
     )
     train_loader_eval = torch.utils.data.DataLoader(
         dataset=train_data,
-        batch_size=n_tr,
+        batch_size=batch_size,
         shuffle=False
     )
     test_loader_eval = torch.utils.data.DataLoader(
         dataset=test_data,
-        batch_size=n_te,
+        batch_size=batch_size,
         shuffle=False
     )
     poison_loader = torch.utils.data.DataLoader(
-        dataset=train_data + poison_data,
+        dataset=random.shuffle(train_data + poison_data),
         batch_size=batch_size,
         shuffle=False
     )
@@ -242,7 +243,7 @@ def train(train_loader, model, loss, optimizer, device):
     acc = running_acc / running_size
     loss = running_loss / running_size
 
-    return running_acc / running_size, running_loss / running_size
+    return acc, loss
 
 
 def eval(eval_loader, model, loss, optimizer, device):
@@ -284,7 +285,7 @@ def eval(eval_loader, model, loss, optimizer, device):
     return acc, loss
 
 
-def plot_history(history, max_epoch=200, train=True, model_name='vgg11', dataset_name='cifar10',
+def plot_history(train_history, test_history, max_epoch=300, train=True, model_name='vgg11', dataset_name='cifar10',
                  experiment='poisoned'):
     """
 
@@ -300,20 +301,26 @@ def plot_history(history, max_epoch=200, train=True, model_name='vgg11', dataset
 
     """
     label = "Training" if train else "Test"
-    name = "train" if train else "test"
 
-    accuracies, losses = [], []
+    train_accuracies, train_losses = [], []
+    test_accuracies, test_losses = [], []
     i = 0
-    for item in history:
-        accuracies.append(item[0] * 100)
-        losses.append(item[1])
+    for item in train_history:
+        train_accuracies.append(item[0])
+        train_losses.append(item[1])
+        
+        test_accuracies.append(test_history[i][0])
+        test_losses.append(test_history[i][1])
         i += 1
-
-    file_name = f"{model_name}_{dataset_name}_{experiment}_{name}"
+    
+    file_name = f"{model_name}_{dataset_name}_{experiment}"
 
     # Accuracy plot
     plt.figure(1)
-    plt.plot(np.arange(i) + 1, accuracies)
+    plt.plot(np.arange(i) + 1, train_accuracies)
+    plt.plot(np.arange(i) + 1, test_accuracies)
+    plt.legend(['training', 'test'])
+    plt.title(file_name + " (Accuracy)")
     plt.xlim([0, max_epoch])
     plt.xlabel("Number of epochs")
     plt.ylim([0, 100])
@@ -323,11 +330,14 @@ def plot_history(history, max_epoch=200, train=True, model_name='vgg11', dataset
 
     # Loss plot
     plt.figure(2)
-    plt.plot(np.arange(i) + 1, losses)
+    plt.plot(np.arange(i) + 1, train_losses)
+    plt.plot(np.arange(i) + 1, test_losses)
+    plt.legend(['training', 'test'])
+    plt.title(file_name + " (Loss)")
     plt.xlim([0, max_epoch])
     plt.xlabel("Number of epochs")
     plt.ylabel("{} loss".format(label))
 
     plt.savefig(project.get_plots_path(file_name + "_loss.pdf"), dpi=600)
 
-    plt.show()
+#     plt.show()

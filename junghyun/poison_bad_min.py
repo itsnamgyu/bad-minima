@@ -23,7 +23,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 # TODO: incorporate different initialization schemes for the training! (e.g. Xavier, He)
-def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=256, lr=0.005, beta=0.1, max_epoch=200,
+def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=256, lr=0.005, beta=0.1, max_epoch=300,
                    verbose=1, plot=False):
     """
 
@@ -33,14 +33,15 @@ def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=256, l
         batch_size: batch size used for the mini-batch training (default: 256)
         lr: learning rate (default: 0.005)
         beta: poison factor i.e. the proportion of data to be poisoned
-        max_epoch: maximum number of epochs (default: 200)
+        max_epoch: maximum number of epochs (default: 300)
         verbose: no output for 0, loss/acc for 1 (default: 1)
         plot: outputs plot of
 
     Returns:
 
     """
-    model = utils.get_model(model_name)
+    # Obtain model and DataLoaders
+    model = utils.get_model(model_name).to(device)
     _, train_loader_eval, test_loader_eval, poison_loader = \
         utils.get_dataloaders(dataset_name, batch_size, beta=beta)
 
@@ -55,7 +56,8 @@ def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=256, l
     eval_history_train, eval_history_test = [], []
 
     # Training
-    for epoch in tqdm(range(max_epoch)):
+    # for epoch in tqdm(range(max_epoch), position=0, leave=True):
+    for epoch in range(max_epoch):
         run_log = utils.train(poison_loader, model, loss, optimizer, device)
         train_log = utils.eval(train_loader_eval, model, loss, optimizer, device)
         test_log = utils.eval(test_loader_eval, model, loss, optimizer, device)
@@ -65,11 +67,11 @@ def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=256, l
         eval_history_test.append(test_log)
 
         if verbose >= 1:
-            print("Epoch {:03d} | tr_acc: {:.4f}, tr_loss: {:.4f} | te_acc: {:.4f}, te_loss: {:.4f}".format(
-                epoch + 1, train_log[0], train_log[1], test_log[0], test_log[1]))
+            print("Epoch {:03d} | tr_acc: {:.4f}%, tr_loss: {:.4f} | te_acc: {:.4f}%, te_loss: {:.4f}".format(
+                epoch + 1, train_log[0], train_log[1], test_log[0], test_log[1]), flush=True)
 
         # If training accuracy is at least 99%, then stop training!
-        if train_log[0] >= 0.99:
+        if train_log[0] >= 99:
             break
 
     # Save the parameter
@@ -79,8 +81,8 @@ def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=256, l
 
     # Save history
     # torch.save(running_history_train, project.get_histories_path(file_name + "_running" + ".pt"))
-    torch.save(eval_history_train, project.get_histories_path(file_name + "_train" + ".pt"))
-    torch.save(eval_history_train, project.get_histories_path(file_name + "_test" + ".pt"))
+    torch.save(eval_history_train, project.get_histories_path(file_name + "_train" + ".pth"))
+    torch.save(eval_history_test, project.get_histories_path(file_name + "_test" + ".pth"))
 
     # Plot
     if plot:
@@ -93,4 +95,15 @@ def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=256, l
 
 
 if __name__ == '__main__':
-    poison_bad_min(plot=True)
+#     model_name = 'vgg11'
+#     dataset_name = 'cifar10'
+#     max_epoch = 200
+    
+#     file_name = f"{model_name}_{dataset_name}_poisoned"
+    
+#     train = torch.load(project.get_histories_path(file_name + "_train" + ".pth"))
+#     test = torch.load(project.get_histories_path(file_name + "_test" + ".pth"))
+    
+#     utils.plot_history(train, test, max_epoch, True, model_name=model_name, dataset_name=dataset_name, experiment='poisoned')
+    poison_bad_min(model_name='resnet18', plot=True)
+    poison_bad_min(model_name='vgg11', plot=True)
