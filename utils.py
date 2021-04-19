@@ -18,16 +18,19 @@ import matplotlib.pyplot as plt
 PROJECT_DIR = os.path.abspath(os.path.dirname(__file__))
 DATASETS_DIR = os.path.join(PROJECT_DIR, "datasets")
 
+_model_classes = {
+    'vgg11': models.vgg11,
+    'resnet18': models.resnet18,
+}
+
 
 def get_model(model_name='vgg11'):
-    if model_name == 'vgg11':
-        model = models.vgg11()
-    elif model_name == 'resnet18':
-        model = models.resnet18()
-    else:
-        raise ValueError("Other models not yet implemented")
+    try:
+        model_class = _model_classes[model_name]
+    except KeyError:
+        raise KeyError("model_name={} is not yet implemented.".format(model_class))
 
-    return model
+    return model_class()
 
 
 def extract_poison(train_data, num_classes, beta=0.1):
@@ -65,6 +68,32 @@ def extract_poison(train_data, num_classes, beta=0.1):
     return train_data, poison_data
 
 
+_datasets = {
+    'mnist': {
+        'data_class': datasets.MNIST,
+        'stats': {
+            'mean': [0.1307],
+            'std': [0.3081]
+        },
+    },
+    'cifar10': {
+        'data_class': datasets.CIFAR10,
+        'stats': {
+            'mean': [0.491, 0.482, 0.447],
+            'std': [0.247, 0.243, 0.262]
+        }
+    },
+    'cifar100': {
+        'data_class': datasets.CIFAR100,
+        'stats': {
+            'mean': [0.5071, 0.4867, 0.4408],
+            'std': [0.2675, 0.2565, 0.2761]
+        }
+    },
+
+}
+
+
 def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1):
     """
     Return DataLoaders
@@ -80,64 +109,46 @@ def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1):
     """
 
     # mean/std stats (for normalization)
-    if dataset_name == 'mnist':
-        data_class = 'MNIST'
-        num_classes = 10
-        stats = {
-            'mean': [0.1307],
-            'std': [0.3081]
-        }
-    elif dataset_name == 'cifar10':
-        data_class = 'CIFAR10'
-        num_classes = 10
-        stats = {
-            'mean': [0.491, 0.482, 0.447],
-            'std': [0.247, 0.243, 0.262]
-        }
-    elif dataset_name == 'cifar100':
-        data_class = 'CIFAR100'
-        num_classes = 100
-        stats = {
-            'mean': [0.5071, 0.4867, 0.4408],
-            'std': [0.2675, 0.2565, 0.2761]
-        }
-    else:
-        raise ValueError("Other datasets not yet implemented")
+    try:
+        dataset = _datasets[dataset_name]
+    except KeyError:
+        raise KeyError("dataset_name={} not yet implemented".format(dataset_name))
 
     # input transformation (without preprocessing...)
-    trans = [
+    transform = transforms.Compose([
         transforms.ToTensor(),
         lambda t: t.type(torch.get_default_dtype()),
-        transforms.Normalize(**stats)
-    ]
+        transforms.Normalize(**dataset["stats"])
+    ])
 
     # Obtain training and test datas with the same normalization
-    train_data = getattr(datasets, data_class)(
+    data_class = dataset["data_class"]
+    train_data = data_class(
         root=DATASETS_DIR,
         train=True,
         download=True,
-        transforms=transforms.Compose(trans)
+        transform=transform
     )
-    test_data = getattr(datasets, data_class)(
+    test_data = data_class(
         root=DATASETS_DIR,
         train=False,
         download=True,
-        transforms=transforms.Compose(trans)
+        transform=transform
     )
+
+    num_classes = len(train_data.classes)
+    assert(num_classes == len(test_data.classes))
 
     # Obtain poisoning portion from the training data
     train_data, poison_data = extract_poison(train_data, num_classes, beta)
     n_tr = len(train_data)
     n_te = len(test_data)
 
-    # Create DataLoaders!
-    # For training! (i.e. mini-batch training)
     train_loader = torch.utils.data.DataLoader(
         dataset=train_data,
         batch_size=batch_size,
         shuffle=False
     )
-    # For evaluation! (i.e. full-batch evaluation of training/test losses)
     train_loader_eval = torch.utils.data.DataLoader(
         dataset=train_data,
         batch_size=n_tr,
@@ -148,7 +159,6 @@ def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1):
         batch_size=n_te,
         shuffle=False
     )
-    # For poisoning attack experiment, only!
     poison_loader = torch.utils.data.DataLoader(
         dataset=train_data + poison_data,
         batch_size=batch_size,
@@ -158,7 +168,6 @@ def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1):
     return train_loader, train_loader_eval, test_loader_eval, poison_loader
 
 
-# TODO: incorporate learning rate scheduling and early stopping!
 def get_SGD(model, lr=0.005, momentum=0.0, weight_decay=0.0):
     """
 
@@ -170,6 +179,7 @@ def get_SGD(model, lr=0.005, momentum=0.0, weight_decay=0.0):
 
     Returns: SGD(torch.optim instance) with the desired parameters
 
+    TODO: incorporate learning rate scheduling and early stopping!
     """
     return optim.SGD(model.parameters(),
                      lr=lr,
@@ -229,6 +239,9 @@ def train(train_loader, model, loss, optimizer, device):
         running_loss += float(loss_value) * bs
         running_acc += float(prec) * bs
 
+    acc = running_acc / running_size
+    loss = running_loss / running_size
+
     return running_acc / running_size, running_loss / running_size
 
 
@@ -265,7 +278,10 @@ def eval(eval_loader, model, loss, optimizer, device):
         total_loss += float(loss_value) * bs
         total_acc += float(prec) * bs
 
-    return total_acc / total_size, total_loss / total_size
+    acc = total_acc / total_size
+    loss = total_loss / total_size
+
+    return acc, loss
 
 
 def plot_history(history, max_epoch=200, train=True, model_name='vgg11', dataset_name='cifar10',

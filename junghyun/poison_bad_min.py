@@ -15,8 +15,8 @@ cf. By "extracting", we are completely removing X_p from X_t.
 import torch
 from torch.nn import CrossEntropyLoss
 from tqdm import tqdm
-from .. import utils
-from .. import project
+import utils
+import project
 
 # Set device (preferably GPU)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
