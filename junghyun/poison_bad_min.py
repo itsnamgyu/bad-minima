@@ -57,6 +57,7 @@ def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=256, l
 
     # Training
     # for epoch in tqdm(range(max_epoch), position=0, leave=True):
+    print(f"\n{dataset_name}, {model_name}")
     for epoch in range(max_epoch):
         run_log = utils.train(poison_loader, model, loss, optimizer, device)
         train_log = utils.eval(train_loader_eval, model, loss, optimizer, device)
@@ -86,24 +87,25 @@ def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=256, l
 
     # Plot
     if plot:
-        utils.plot_history(eval_history_train, max_epoch, True,
-                           model_name=model_name, dataset_name=dataset_name, experiment='poisoned')
-        utils.plot_history(eval_history_test, max_epoch, False,
+        utils.plot_history(eval_history_train, eval_history_test, max_epoch, True,
                            model_name=model_name, dataset_name=dataset_name, experiment='poisoned')
 
     return poisoned_init
 
 
 if __name__ == '__main__':
-#     model_name = 'vgg11'
+#     model_name = 'resnet18'
 #     dataset_name = 'cifar10'
-#     max_epoch = 200
+#     max_epoch = 300
     
 #     file_name = f"{model_name}_{dataset_name}_poisoned"
     
 #     train = torch.load(project.get_histories_path(file_name + "_train" + ".pth"))
 #     test = torch.load(project.get_histories_path(file_name + "_test" + ".pth"))
-    
-#     utils.plot_history(train, test, max_epoch, True, model_name=model_name, dataset_name=dataset_name, experiment='poisoned')
-    poison_bad_min(model_name='resnet18', plot=True)
-    poison_bad_min(model_name='vgg11', plot=True)
+#     utils.plot_history(train, test, max_epoch, True,
+#                                model_name=model_name, dataset_name=dataset_name, experiment='poisoned')
+    for dataset_name in ['cifar10', 'cifar100', 'mnist']:
+        for model_name in ['resnet18', 'vgg11']:
+            if dataset_name == 'cifar10' and model_name == 'resnet18':
+                continue
+            poison_bad_min(model_name, dataset_name, plot=True)

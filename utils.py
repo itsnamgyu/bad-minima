@@ -160,8 +160,10 @@ def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1):
         batch_size=batch_size,
         shuffle=False
     )
+    tmp = train_data + poison_data
+    random.shuffle(tmp)
     poison_loader = torch.utils.data.DataLoader(
-        dataset=random.shuffle(train_data + poison_data),
+        dataset=tmp,
         batch_size=batch_size,
         shuffle=False
     )
@@ -221,7 +223,7 @@ def train(train_loader, model, loss, optimizer, device):
     model.train()
 
     running_size, running_loss, running_acc = 0, 0, 0
-    for i, data in enumerate(train_loader, 0):
+    for i, data in enumerate(train_loader):
         x, y = data
         x, y = x.to(device), y.to(device)
         bs = x.size(0)
@@ -316,7 +318,7 @@ def plot_history(train_history, test_history, max_epoch=300, train=True, model_n
     file_name = f"{model_name}_{dataset_name}_{experiment}"
 
     # Accuracy plot
-    plt.figure(1)
+    plt.figure(1, figsize=(20, 10))
     plt.plot(np.arange(i) + 1, train_accuracies)
     plt.plot(np.arange(i) + 1, test_accuracies)
     plt.legend(['training', 'test'])
@@ -329,7 +331,7 @@ def plot_history(train_history, test_history, max_epoch=300, train=True, model_n
     plt.savefig(project.get_plots_path(file_name + "_acc.pdf"), dpi=600)
 
     # Loss plot
-    plt.figure(2)
+    plt.figure(2, figsize=(20, 10))
     plt.plot(np.arange(i) + 1, train_losses)
     plt.plot(np.arange(i) + 1, test_losses)
     plt.legend(['training', 'test'])
