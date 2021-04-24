@@ -4,7 +4,7 @@ Created on 2021/04/18
 
 Utility functions for common use
 
-Current implementations: get_model, get_dataloaders, get_SGD, train, eval, plot_history
+Current implementations: get_mean_and_std, get_model, extract_poison, get_dataloaders, get_SGD, train, eval, plot_history
 """
 import os
 import project
@@ -13,6 +13,7 @@ import random
 import torch
 import torch.optim as optim
 from torchvision import datasets, transforms, models
+import resnet, vgg, densenet, densenet40
 import matplotlib
 import matplotlib.pyplot as plt
 # Non-interactive backend
@@ -23,62 +24,87 @@ PROJECT_DIR = os.path.abspath(os.path.dirname(__file__))
 DATASETS_DIR = os.path.join(PROJECT_DIR, "datasets")
 
 _model_classes = {
-    'vgg11': models.vgg11,
-    'resnet18': models.resnet18,
+    'vgg11': vgg.VGG11,
+    'vgg13': vgg.VGG13,
+    'vgg16': vgg.VGG16,
+    'vgg19': vgg.VGG19,
+    'resnet18': resnet.ResNet18,
+    'resnet34': resnet.ResNet34,
+    'resnet50': resnet.ResNet50,
+    'resnet101': resnet.ResNet101,
+    'resnet152': resnet.ResNet152,
+    'densenet40': densenet40.DenseNet40,
+    'densenet121': densenet.DenseNet121,
+    'densenet169': densenet.DenseNet169,
+    'densenet201': densenet.DenseNet201,
+    'densenet161': densenet.DenseNet161,
 }
 
+# mean and std calculated after taking out the poisoned portion!
 _datasets = {
-    'mnist': {
-        'data_class': datasets.MNIST,
-        'stats': {
-            'mean': [0.1307],
-            'std': [0.3081]
-        },
-    },
     'cifar10': {
         'data_class': datasets.CIFAR10,
         'stats': {
-            'mean': [0.491, 0.482, 0.447],
-            'std': [0.247, 0.243, 0.262]
-        }
+            'mean': [0.4914, 0.4822, 0.4465],
+            'std': [0.2023, 0.1994, 0.2010]
+        },
+        'num_classes': 10
     },
     'cifar100': {
         'data_class': datasets.CIFAR100,
         'stats': {
-            'mean': [0.5071, 0.4867, 0.4408],
-            'std': [0.2675, 0.2565, 0.2761]
-        }
+            'mean': [0.5071, 0.4865, 0.4409],
+            'std': [0.2009, 0.1984, 0.2023]
+        },
+        'num_classes': 100
     },
 
 }
 
 
-def get_model(model_name='vgg11'):
+def get_mean_and_std(dataset):
+    '''Compute the mean and std value of dataset.'''
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
+    mean = torch.zeros(3)
+    std = torch.zeros(3)
+    print('==> Computing mean and std..')
+    for inputs, targets in dataloader:
+        for i in range(3):
+            mean[i] += inputs[:,i,:,:].mean()
+            std[i] += inputs[:,i,:,:].std()
+    mean.div_(len(dataset))
+    std.div_(len(dataset))
+    return mean, std
+
+
+def get_model(model_name='vgg11', num_classes=10):
     try:
         model_class = _model_classes[model_name]
     except KeyError:
         raise KeyError("model_name={} is not yet implemented.".format(model_class))
 
-    return model_class()
+    return model_class(num_classes=num_classes)
 
 
 def extract_poison(train_data, num_classes, beta=0.1):
     """
     Randomly sample datas from train_data and corrupt their labels
+    Corrupted datas are *removed* from the train_data
 
     Args:
         train_data: a class instance of torchvision.datasets (training portion)
         num_classes: number of classes for labels
         beta: poison factor i.e. the proportion of data to be poisoned! (takes the value between 0 and 1)
 
-    Returns: train_data, poison_data
+    Returns: train_data_, poison_data
 
     """
     # Size of poisoning data is half of the test data
     # However, the data itself is extracted from the TRAINING data
     n_tr = len(train_data)
-
+    
     poison_size = int(beta * n_tr)
+    np.random.seed(17)   # For fair comparison among models! (same poisoned subset)
     poison_idx = np.random.choice(np.arange(n_tr), poison_size, replace=False)
 
     # Because train_data is 'CIFAR' class, we need to build a separate iterable object for Dataloaders
@@ -92,9 +118,9 @@ def extract_poison(train_data, num_classes, beta=0.1):
         i += 1
 
     # Collect the remaining (correctly labeled) datas
-    train_data = [train_data[idx] for idx in np.delete(np.arange(n_tr), poison_idx)]
+    train_data_ = [train_data[idx] for idx in np.delete(np.arange(n_tr), poison_idx)]
 
-    return train_data, poison_data
+    return train_data_, poison_data
 
 
 def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1):
@@ -110,6 +136,7 @@ def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1):
     Returns: 4 DataLoaders (train, train_eval, test_eval, poison)
 
     """
+    kwargs = {'num_workers': 4, 'pin_memory': True} if torch.cuda.is_available() else {}
 
     # mean/std stats (for normalization)
     try:
@@ -117,15 +144,27 @@ def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1):
     except KeyError:
         raise KeyError("dataset_name={} not yet implemented".format(dataset_name))
 
+    # Obtain training and test datas with the normalization obtained from the training dataset
+    data_class = dataset["data_class"]
+    
+    # Comment out!
+#     tmp = data_class(
+#         root=DATASETS_DIR,
+#         train=True,
+#         download=True,
+#         transform= transforms.Compose([transforms.ToTensor(), lambda t: t.type(torch.get_default_dtype())])
+#     )
+#     mu, sigma = get_mean_and_std(tmp)
+#     print(dataset_name, mu, sigma)
+    
     # input transformation (without preprocessing...)
     transform = transforms.Compose([
         transforms.ToTensor(),
-        lambda t: t.type(torch.get_default_dtype()),
+#         lambda t: t.type(torch.get_default_dtype()),
+#         transforms.Normalize(mu, sigma)
         transforms.Normalize(**dataset["stats"])
     ])
-
-    # Obtain training and test datas with the same normalization
-    data_class = dataset["data_class"]
+        
     train_data = data_class(
         root=DATASETS_DIR,
         train=True,
@@ -142,30 +181,35 @@ def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1):
     num_classes = len(train_data.classes)
     assert(num_classes == len(test_data.classes))
 
+
     # Obtain poisoning portion from the training data
     train_data, poison_data = extract_poison(train_data, num_classes, beta)
     
     train_loader = torch.utils.data.DataLoader(
         dataset=train_data,
         batch_size=batch_size,
-        shuffle=False
+        shuffle=True,
+        **kwargs
     )
     train_loader_eval = torch.utils.data.DataLoader(
         dataset=train_data,
         batch_size=batch_size,
-        shuffle=False
+        shuffle=False,
+        **kwargs
     )
     test_loader_eval = torch.utils.data.DataLoader(
         dataset=test_data,
         batch_size=batch_size,
-        shuffle=False
+        shuffle=False,
+        **kwargs
     )
     tmp = train_data + poison_data
     random.shuffle(tmp)
     poison_loader = torch.utils.data.DataLoader(
         dataset=tmp,
         batch_size=batch_size,
-        shuffle=False
+        shuffle=False,
+        **kwargs
     )
 
     return train_loader, train_loader_eval, test_loader_eval, poison_loader
@@ -206,7 +250,7 @@ def accuracy(output, y):
     return 100 * correct.sum().float() / y.size(0)
 
 
-def train(train_loader, model, loss, optimizer, device):
+def train(train_loader, model, loss, optimizer, scheduler, device):
     """
     Train the model for 1 epoch
 
@@ -215,6 +259,7 @@ def train(train_loader, model, loss, optimizer, device):
         model: model to be evaluated at
         loss: loss function (ex. torch.nn.CrossEntropyLoss)
         optimizer: optimizer used (ex. optim.SGD())
+        scheduler: scheduler used (ex. optim.lr_scheduler.MultiStepLR())
         device: torch.device currently used
 
     Returns: loss, accuracy
@@ -223,8 +268,9 @@ def train(train_loader, model, loss, optimizer, device):
     model.train()
 
     running_size, running_loss, running_acc = 0, 0, 0
-    for i, data in enumerate(train_loader):
-        x, y = data
+#     for i, data in enumerate(train_loader):
+    for x, y in train_loader:
+#         x, y = data
         x, y = x.to(device), y.to(device)
         bs = x.size(0)
 
@@ -237,6 +283,8 @@ def train(train_loader, model, loss, optimizer, device):
         loss_value.backward()
 
         optimizer.step()
+        if scheduler is not None:
+            scheduler.step()
 
         running_size += int(bs)
         running_loss += float(loss_value) * bs
@@ -248,7 +296,7 @@ def train(train_loader, model, loss, optimizer, device):
     return acc, loss
 
 
-def eval(eval_loader, model, loss, optimizer, device):
+def evaluate(eval_loader, model, loss, optimizer, device):
     """
     Outputs the {training, test} loss and accuracy
 
@@ -287,8 +335,7 @@ def eval(eval_loader, model, loss, optimizer, device):
     return acc, loss
 
 
-def plot_history(train_history, test_history, max_epoch=300, train=True, model_name='vgg11', dataset_name='cifar10',
-                 experiment='poisoned'):
+def plot_history(train_history, test_history, max_epoch=300, train=True, model_name='vgg11', dataset_name='cifar10', experiment='poisoned'):
     """
 
     Args:
@@ -319,6 +366,7 @@ def plot_history(train_history, test_history, max_epoch=300, train=True, model_n
 
     # Accuracy plot
     plt.figure(1, figsize=(20, 10))
+    plt.clf()
     plt.plot(np.arange(i) + 1, train_accuracies)
     plt.plot(np.arange(i) + 1, test_accuracies)
     plt.legend(['training', 'test'])
@@ -326,19 +374,20 @@ def plot_history(train_history, test_history, max_epoch=300, train=True, model_n
     plt.xlim([0, max_epoch])
     plt.xlabel("Number of epochs")
     plt.ylim([0, 100])
-    plt.ylabel("{} accuracy".format(label))
+    plt.ylabel("Accuracy")
 
     plt.savefig(project.get_plots_path(file_name + "_acc.pdf"), dpi=600)
 
     # Loss plot
     plt.figure(2, figsize=(20, 10))
+    plt.clf()
     plt.plot(np.arange(i) + 1, train_losses)
     plt.plot(np.arange(i) + 1, test_losses)
     plt.legend(['training', 'test'])
     plt.title(file_name + " (Loss)")
     plt.xlim([0, max_epoch])
     plt.xlabel("Number of epochs")
-    plt.ylabel("{} loss".format(label))
+    plt.ylabel("Loss")
 
     plt.savefig(project.get_plots_path(file_name + "_loss.pdf"), dpi=600)
 
