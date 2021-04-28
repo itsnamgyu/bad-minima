@@ -5,7 +5,9 @@ Created on 2021/04/18
 Outputs a good minima (usual training with vanilla SGD)
 """
 import torch
+from torch import cuda
 from torch.nn import CrossEntropyLoss
+import torch.backends.cudnn as cudnn
 import torch.optim as optim
 from tqdm import tqdm
 import utils
@@ -42,7 +44,11 @@ def good_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, lr=0.1,
         model = utils.get_model(model_name, num_classes=100).to(device)
     else:
         raise KeyError("dataset_name={} not yet implemented".format(dataset_name))
-
+    
+#     if cuda.is_available():
+#         model = torch.nn.DataParallel(model)
+#         cudnn.benchmark = True
+    
     # CE Loss function
     loss = CrossEntropyLoss().to(device)
 
@@ -105,5 +111,6 @@ def good_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, lr=0.1,
 
 if __name__ == '__main__':
     for dataset_name in ['cifar10', 'cifar100']:
-        for model_name in ['vgg11', 'densenet40', 'resnet18']:
-            good_min(model_name, dataset_name, plot=True)
+        for model_name in ['resnet18', 'vgg11', 'resnet50', 'vgg16', 'densenet40']:
+#             good_min(model_name, dataset_name, plot=True)
+            good_min(model_name, dataset_name, plot=True, beta=0)

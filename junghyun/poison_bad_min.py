@@ -114,5 +114,5 @@ def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, l
 
 if __name__ == '__main__':
     for dataset_name in ['cifar10', 'cifar100']:
-        for model_name in ['vgg11', 'densenet40', 'resnet18']:
+        for model_name in ['vgg11', 'resnet18', 'densenet40']:
             poison_bad_min(model_name, dataset_name, plot=True)
