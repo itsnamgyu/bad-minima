@@ -102,7 +102,7 @@ def extract_poison(train_data, num_classes, beta=0.1):
     # Size of poisoning data is half of the test data
     # However, the data itself is extracted from the TRAINING data
     n_tr = len(train_data)
-    
+
     poison_size = int(beta * n_tr)
     np.random.seed(17)   # For fair comparison among models! (same poisoned subset)
     poison_idx = np.random.choice(np.arange(n_tr), poison_size, replace=False)
@@ -123,7 +123,7 @@ def extract_poison(train_data, num_classes, beta=0.1):
     return train_data_, poison_data
 
 
-def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1):
+def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1, augment=False):
     """
     Return DataLoaders
 
@@ -132,6 +132,8 @@ def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1):
         batch_size: batch size used for the mini-batch training
         beta: poison factor i.e. the proportion of data to be poisoned
             (alternatively, it can be interpreted as the "contribution" of the poisoned CE to our loss function)
+        augment: whether to augment data according to Liu 2020,
+            (https://github.com/chao1224/BadGlobalMinima)
 
     Returns: 4 DataLoaders (train, train_eval, test_eval, poison)
 
@@ -146,25 +148,30 @@ def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1):
 
     # Obtain training and test datas with the normalization obtained from the training dataset
     data_class = dataset["data_class"]
-    
+
     # Comment out!
-#     tmp = data_class(
-#         root=DATASETS_DIR,
-#         train=True,
-#         download=True,
-#         transform= transforms.Compose([transforms.ToTensor(), lambda t: t.type(torch.get_default_dtype())])
-#     )
-#     mu, sigma = get_mean_and_std(tmp)
-#     print(dataset_name, mu, sigma)
-    
-    # input transformation (without preprocessing...)
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-#         lambda t: t.type(torch.get_default_dtype()),
-#         transforms.Normalize(mu, sigma)
-        transforms.Normalize(**dataset["stats"])
-    ])
-        
+    #     tmp = data_class(
+    #         root=DATASETS_DIR,
+    #         train=True,
+    #         download=True,
+    #         transform= transforms.Compose([transforms.ToTensor(), lambda t: t.type(torch.get_default_dtype())])
+    #     )
+    #     mu, sigma = get_mean_and_std(tmp)
+    #     print(dataset_name, mu, sigma)
+
+    if augment:
+        transform = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(**dataset["stats"]),
+        ])
+    else:
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(**dataset["stats"]),
+        ])
+
     train_data = data_class(
         root=DATASETS_DIR,
         train=True,
@@ -184,7 +191,7 @@ def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1):
 
     # Obtain poisoning portion from the training data
     train_data, poison_data = extract_poison(train_data, num_classes, beta)
-    
+
     train_loader = torch.utils.data.DataLoader(
         dataset=train_data,
         batch_size=batch_size,
@@ -354,11 +361,11 @@ def plot_history(train_history, test_history, max_epoch=300, train=True, model_n
     for item in train_history:
         train_accuracies.append(item[0])
         train_losses.append(item[1])
-        
+
         test_accuracies.append(test_history[i][0])
         test_losses.append(test_history[i][1])
         i += 1
-    
+
     file_name = f"{model_name}_{dataset_name}_{experiment}"
 
     # Accuracy plot
