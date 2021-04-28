@@ -316,8 +316,6 @@ def evaluate(eval_loader, model, loss, device):
         x, y = x.to(device), y.to(device)
         bs = x.size(0)
 
-        optimizer.zero_grad()
-
         output = model(x)
         loss_value = loss(output, y)
         prec = accuracy(output, y)
