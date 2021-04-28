@@ -296,7 +296,7 @@ def train(train_loader, model, loss, optimizer, scheduler, device):
     return acc, loss
 
 
-def evaluate(eval_loader, model, loss, optimizer, device):
+def evaluate(eval_loader, model, loss, device):
     """
     Outputs the {training, test} loss and accuracy
 
@@ -304,7 +304,6 @@ def evaluate(eval_loader, model, loss, optimizer, device):
         eval_loader: choose between train_loader_eval and test_loader_eval
         model: model to be evaluated at
         loss: loss function (ex. torch.nn.CrossEntropyLoss)
-        optimizer: optimizer used (ex. optim.SGD())
         device: torch.device currently used
 
     Returns: loss, accuracy as float type
