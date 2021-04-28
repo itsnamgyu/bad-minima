@@ -123,41 +123,14 @@ def extract_poison(train_data, num_classes, beta=0.1):
     return train_data_, poison_data
 
 
-def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1, augment=False):
-    """
-    Return DataLoaders
-
-    Args:
-        dataset_name: name of the dataset to be used (Default: cifar10)
-        batch_size: batch size used for the mini-batch training
-        beta: poison factor i.e. the proportion of data to be poisoned
-            (alternatively, it can be interpreted as the "contribution" of the poisoned CE to our loss function)
-        augment: whether to augment data according to Liu 2020,
-            (https://github.com/chao1224/BadGlobalMinima)
-
-    Returns: 4 DataLoaders (train, train_eval, test_eval, poison)
-
-    """
-    kwargs = {'num_workers': 4, 'pin_memory': True} if torch.cuda.is_available() else {}
-
-    # mean/std stats (for normalization)
+def get_dataset(dataset_name='cifar10', augment=False, train=True):
     try:
         dataset = _datasets[dataset_name]
     except KeyError:
         raise KeyError("dataset_name={} not yet implemented".format(dataset_name))
 
     # Obtain training and test datas with the normalization obtained from the training dataset
-    data_class = dataset["data_class"]
-
-    # Comment out!
-    #     tmp = data_class(
-    #         root=DATASETS_DIR,
-    #         train=True,
-    #         download=True,
-    #         transform= transforms.Compose([transforms.ToTensor(), lambda t: t.type(torch.get_default_dtype())])
-    #     )
-    #     mu, sigma = get_mean_and_std(tmp)
-    #     print(dataset_name, mu, sigma)
+    dataset_class = dataset["data_class"]
 
     if augment:
         transform = transforms.Compose([
@@ -172,25 +145,37 @@ def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1, augment=Fa
             transforms.Normalize(**dataset["stats"]),
         ])
 
-    train_data = data_class(
+    return dataset_class(
         root=DATASETS_DIR,
-        train=True,
+        train=train,
         download=True,
         transform=transform
     )
-    test_data = data_class(
-        root=DATASETS_DIR,
-        train=False,
-        download=True,
-        transform=transform
-    )
+
+def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1, augment=False):
+    """
+    Return DataLoaders
+
+    Args:
+        dataset_name: name of the dataset to be used (Default: cifar10)
+        batch_size: batch size used for the mini-batch training
+        beta: poison factor i.e. the proportion of data to be poisoned
+            (alternatively, it can be interpreted as the "contribution" of the poisoned CE to our loss function)
+        augment: whether to augment data according to Liu 2020,
+            (https://github.com/chao1224/BadGlobalMinima)
+
+    Returns: 4 DataLoaders (train, train_eval, test_eval, poison)
+    """
+    train_data = get_dataset(dataset_name, augment, train=True)
+    test_data = get_dataset(dataset_name, augment, train=False)
 
     num_classes = len(train_data.classes)
     assert(num_classes == len(test_data.classes))
 
-
     # Obtain poisoning portion from the training data
     train_data, poison_data = extract_poison(train_data, num_classes, beta)
+
+    kwargs = {'num_workers': 4, 'pin_memory': True} if torch.cuda.is_available() else {}
 
     train_loader = torch.utils.data.DataLoader(
         dataset=train_data,
