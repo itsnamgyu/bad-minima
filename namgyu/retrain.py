@@ -35,10 +35,10 @@ def retrain_sgd_(model, dataset_name, augment: bool, l2: float, momentum: float,
     test_history = []  # [ (loss, accuracy) ]
     print("Training model for {} epochs".format(epochs))
     for _ in tqdm(range(epochs)):
-        loss_acc = utils.train(train_loader, model, criteria, optimizer, scheduler, device)
-        train_history.append(loss_acc)
-        loss_acc = utils.evaluate(train_loader, model, criteria, device)
-        test_history.append(loss_acc)
+        acc_loss = utils.train(train_loader, model, criteria, optimizer, scheduler, device)
+        train_history.append(acc_loss)
+        acc_loss = utils.evaluate(train_loader, model, criteria, device)
+        test_history.append(acc_loss)
 
     return model, train_history, test_history
 
@@ -89,7 +89,7 @@ def retrain_all_sgd_tricks(model: nn.Module, dataset_name, key="retrain_after_mi
         torch.save(train_history, project.get_histories_path(train_key))
         torch.save(test_history, project.get_histories_path(test_key))
 
-        loss, acc = test_history[-1]
+        acc, loss = test_history[-1]
         all_results["loss"].append(loss)
         all_results["acc"].append(acc)
 

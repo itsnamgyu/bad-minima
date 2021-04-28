@@ -227,7 +227,7 @@ def get_SGD(model, lr=0.005, momentum=0.0, weight_decay=0.0):
                      )
 
 
-def accuracy(output, y):
+def accuracy_percentage(output, y):
     """
 
     Args:
@@ -254,7 +254,7 @@ def train(train_loader, model, loss, optimizer, scheduler, device):
         scheduler: scheduler used (ex. optim.lr_scheduler.MultiStepLR())
         device: torch.device currently used
 
-    Returns: loss, accuracy
+    Returns: accuracy (%), loss
 
     """
     model.train()
@@ -270,7 +270,7 @@ def train(train_loader, model, loss, optimizer, scheduler, device):
 
         output = model(x)
         loss_value = loss(output, y)
-        prec = accuracy(output, y)
+        acc_percentage = accuracy_percentage(output, y)
 
         loss_value.backward()
 
@@ -280,7 +280,7 @@ def train(train_loader, model, loss, optimizer, scheduler, device):
 
         running_size += int(bs)
         running_loss += float(loss_value) * bs
-        running_acc += float(prec) * bs
+        running_acc += float(acc_percentage) * bs
 
     acc = running_acc / running_size
     loss = running_loss / running_size
@@ -298,7 +298,7 @@ def evaluate(eval_loader, model, loss, device):
         loss: loss function (ex. torch.nn.CrossEntropyLoss)
         device: torch.device currently used
 
-    Returns: loss, accuracy as float type
+    Returns: accuracy, loss
 
     """
     model.eval()
@@ -310,13 +310,13 @@ def evaluate(eval_loader, model, loss, device):
 
         output = model(x)
         loss_value = loss(output, y)
-        prec = accuracy(output, y)
+        acc_percentage = accuracy_percentage(output, y)
 
         loss_value.backward()
 
         total_size += int(bs)
         total_loss += float(loss_value) * bs
-        total_acc += float(prec) * bs
+        total_acc += float(acc_percentage) * bs
 
     acc = total_acc / total_size
     loss = total_loss / total_size
