@@ -37,7 +37,7 @@ def retrain_sgd_(model, dataset_name, augment: bool, l2: float, momentum: float,
     for _ in tqdm(range(epochs)):
         acc_loss = utils.train(train_loader, model, criteria, optimizer, scheduler, device)
         train_history.append(acc_loss)
-        acc_loss = utils.evaluate(train_loader, model, criteria, device)
+        acc_loss = utils.evaluate(test_loader, model, criteria, device)
         test_history.append(acc_loss)
 
     return model, train_history, test_history
