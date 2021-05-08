@@ -34,11 +34,28 @@ def retrain_sgd_(model, dataset_name, augment: bool, l2: float, momentum: float,
     train_history = []  # [ (loss, accuracy) ]
     test_history = []  # [ (loss, accuracy) ]
     print("Training model for {} epochs".format(epochs))
-    for _ in tqdm(range(epochs)):
+
+    # Evaluate at initialization (TODO: remove duplicate code!)
+    acc_loss = utils.evaluate(train_loader, model, criteria, device)
+    tra, trl = acc_loss
+    train_history.append(acc_loss)
+    acc_loss = utils.evaluate(test_loader, model, criteria, device)
+    tea, tel = acc_loss
+    test_history.append(acc_loss)
+    print("Epoch {:03}: Train Loss={:.4f} Acc={:.4f} Test Loss={:.4f} Acc={:.4f}".format(
+        0, trl, tra, tel, tea
+    ))
+
+    for e in range(epochs):
         acc_loss = utils.train(train_loader, model, criteria, optimizer, scheduler, device)
+        tra, trl = acc_loss
         train_history.append(acc_loss)
         acc_loss = utils.evaluate(test_loader, model, criteria, device)
+        tea, tel = acc_loss
         test_history.append(acc_loss)
+        print("Epoch {:03}: Train Loss={:.4f} Acc={:.4f} Test Loss={:.4f} Acc={:.4f}".format(
+            e + 1, trl, tra, tel, tea
+        ))
 
     return model, train_history, test_history
 
