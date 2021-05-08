@@ -152,7 +152,7 @@ def get_dataset(dataset_name='cifar10', augment=False, train=True):
         transform=transform
     )
 
-def get_dataloaders(dataset_name='cifar10', batch_size=256, beta=0.1, augment=False):
+def get_dataloaders(dataset_name='cifar10', batch_size=128, beta=0.1, augment=False):
     """
     Return DataLoaders
 
