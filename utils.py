@@ -275,12 +275,13 @@ def train(train_loader, model, loss, optimizer, scheduler, device):
         loss_value.backward()
 
         optimizer.step()
-        if scheduler is not None:
-            scheduler.step()
 
         running_size += int(bs)
-        running_loss += float(loss_value) * bs
+        running_loss += float(loss_value) * bs  # TODO: other implementations don't seem to multiply bs? (check)
         running_acc += float(acc_percentage) * bs
+
+    if scheduler is not None:
+        scheduler.step()
 
     acc = running_acc / running_size
     loss = running_loss / running_size
