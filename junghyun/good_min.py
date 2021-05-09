@@ -15,11 +15,11 @@ import project
 import resnet
 
 # Set device (preferably GPU)
-device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 # TODO: incorporate different initialization schemes for the training! (e.g. Xavier, He)
-def good_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, lr=0.1, schedule=True, beta=0.1, max_epoch=350, verbose=1, plot=False):
+def good_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, lr=0.1, schedule=True, max_epoch=350, verbose=1, plot=False):
     """
 
     Args:
@@ -37,7 +37,7 @@ def good_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, lr=0.1,
     """
     # Obtain model and DataLoaders
     train_loader, train_loader_eval, test_loader_eval, _ = \
-        utils.get_dataloaders(dataset_name, batch_size, beta=beta)
+        utils.get_dataloaders(dataset_name, batch_size, beta=0)
     if dataset_name == 'cifar10':
         model = utils.get_model(model_name, num_classes=10).to(device)
     elif dataset_name == 'cifar100':
@@ -68,16 +68,16 @@ def good_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, lr=0.1,
     # for epoch in tqdm(range(max_epoch), position=0, leave=True):
     print(f"\n{dataset_name}, {model_name}")
     # initial point
-    train_log = utils.evaluate(train_loader_eval, model, loss, optimizer, device)
-    test_log = utils.evaluate(test_loader_eval, model, loss, optimizer, device)
+    train_log = utils.evaluate(train_loader_eval, model, loss, device)
+    test_log = utils.evaluate(test_loader_eval, model, loss, device)
     if verbose >= 1:
         print("Epoch 000 | tr_acc: {:.4f}%, tr_loss: {:.4f} | te_acc: {:.4f}%, te_loss: {:.4f}".format(
             train_log[0], train_log[1], test_log[0], test_log[1]), flush=True)
 
     for epoch in range(max_epoch):
         run_log = utils.train(train_loader, model, loss, optimizer, scheduler, device)
-        train_log = utils.evaluate(train_loader_eval, model, loss, optimizer, device)
-        test_log = utils.evaluate(test_loader_eval, model, loss, optimizer, device)
+        train_log = utils.evaluate(train_loader_eval, model, loss, device)
+        test_log = utils.evaluate(test_loader_eval, model, loss, device)
 
         # running_history_train.append(run_log)
         eval_history_train.append(train_log)
@@ -111,6 +111,6 @@ def good_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, lr=0.1,
 
 if __name__ == '__main__':
     for dataset_name in ['cifar10', 'cifar100']:
-        for model_name in ['resnet18', 'vgg11', 'resnet50', 'vgg16', 'densenet40']:
-#             good_min(model_name, dataset_name, plot=True)
-            good_min(model_name, dataset_name, plot=True, beta=0)
+#         for model_name in ['resnet152', 'vgg19']:
+        for model_name in ['resnet18', 'vgg11', 'densenet40']:
+            good_min(model_name, dataset_name, plot=True)

@@ -20,18 +20,18 @@ import utils
 import project
 
 # Set device (preferably GPU)
-device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 # TODO: incorporate different initialization schemes for the training! (e.g. Xavier, He)
-def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, lr=0.1, schedule=True, beta=0.1, max_epoch=350, verbose=1, plot=False):
+def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, lr=0.1, schedule=True, beta=0.2, max_epoch=350, verbose=1, plot=False):
     """
 
     Args:
         dataset_name: name of the dataset from {'mnist', 'cifar10', 'cifar100'}
         model_name: name of the model from {'vgg11', 'resnet18'}
         batch_size: batch size used for the mini-batch training (default: 128)
-        lr: initial learning rate (default: 0.1)
+        lr: initial learning rate (default: 0.2)
         schedule: whether to use lr scheduling or not
         beta: poison factor i.e. the proportion of data to be poisoned
         max_epoch: maximum number of epochs (default: 350)
@@ -71,16 +71,17 @@ def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, l
     # for epoch in tqdm(range(max_epoch), position=0, leave=True):
     print(f"\n{dataset_name}, {model_name}")
     # initial point
-    train_log = utils.evaluate(train_loader_eval, model, loss, optimizer, device)
-    test_log = utils.evaluate(test_loader_eval, model, loss, optimizer, device)
+    train_log = utils.evaluate(train_loader_eval, model, loss, device)
+    test_log = utils.evaluate(test_loader_eval, model, loss, device)
     if verbose >= 1:
         print("Epoch 000 | tr_acc: {:.4f}%, tr_loss: {:.4f} | te_acc: {:.4f}%, te_loss: {:.4f}".format(
             train_log[0], train_log[1], test_log[0], test_log[1]), flush=True)
     
+    add_epoch = 10
     for epoch in range(max_epoch):
         run_log = utils.train(poison_loader, model, loss, optimizer, scheduler, device)
-        train_log = utils.evaluate(train_loader_eval, model, loss, optimizer, device)
-        test_log = utils.evaluate(test_loader_eval, model, loss, optimizer, device)
+        train_log = utils.evaluate(train_loader_eval, model, loss, device)
+        test_log = utils.evaluate(test_loader_eval, model, loss, device)
 
         # running_history_train.append(run_log)
         eval_history_train.append(train_log)
@@ -90,8 +91,11 @@ def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, l
             print("Epoch {:03d} | tr_acc: {:.4f}%, tr_loss: {:.4f} | te_acc: {:.4f}%, te_loss: {:.4f}".format(
                 epoch + 1, train_log[0], train_log[1], test_log[0], test_log[1]), flush=True)
 
-        # If training accuracy is at least 99%, then stop training!
-#         if train_log[0] >= 99:
+#         If training accuracy is at least 100%, then train for 10 more epochs!
+#         if train_log[0] >= 100:
+#             add_epoch -= 1
+            
+#         if add_epoch < 0:
 #             break
 
     # Save the parameter
@@ -114,5 +118,6 @@ def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, l
 
 if __name__ == '__main__':
     for dataset_name in ['cifar10', 'cifar100']:
-        for model_name in ['vgg11', 'resnet18', 'densenet40']:
-            poison_bad_min(model_name, dataset_name, plot=True)
+#         for model_name in ['resnet152', 'vgg19']:
+        for model_name in ['resnet18', 'vgg11', 'densenet40']:
+            poison_bad_min(model_name, dataset_name, plot=True, beta=0.2)
