@@ -24,16 +24,17 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 # TODO: incorporate different initialization schemes for the training! (e.g. Xavier, He)
-def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, lr=0.1, schedule=True, beta=0.2, max_epoch=350, verbose=1, plot=False):
+def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, lr=0.1, momentum=0.0, weight_decay=0.0,
+                   schedule=True, beta=0.2, max_epoch=350, verbose=1, plot=False):
     """
 
     Args:
         dataset_name: name of the dataset from {'mnist', 'cifar10', 'cifar100'}
         model_name: name of the model from {'vgg11', 'resnet18'}
         batch_size: batch size used for the mini-batch training (default: 128)
-        lr: initial learning rate (default: 0.2)
+        lr: initial learning rate (default: 0.1)
         schedule: whether to use lr scheduling or not
-        beta: poison factor i.e. the proportion of data to be poisoned
+        beta: poison factor i.e. the proportion of added poisoned data w.r.t. training data (default: 0.2)
         max_epoch: maximum number of epochs (default: 350)
         verbose: no output for 0, loss/acc for 1 (default: 1)
         plot: outputs plot of
@@ -56,7 +57,7 @@ def poison_bad_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, l
     loss = CrossEntropyLoss().to(device)
 
     # SGD Optimizer
-    optimizer = utils.get_SGD(model, lr=lr)
+    optimizer = utils.get_SGD(model, lr=lr, momentum=momentum, weight_decay=weight_decay)
     # lr scheduler
     if schedule:
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[150, 250], gamma=0.1)

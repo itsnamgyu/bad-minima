@@ -19,7 +19,8 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 # TODO: incorporate different initialization schemes for the training! (e.g. Xavier, He)
-def good_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, lr=0.1, schedule=True, max_epoch=350, verbose=1, plot=False):
+def good_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, lr=0.1, momentum=0.0, weight_decay=0.0,
+             schedule=True, max_epoch=350, verbose=1, plot=False):
     """
 
     Args:
@@ -53,7 +54,7 @@ def good_min(model_name='vgg11', dataset_name='cifar10', batch_size=128, lr=0.1,
     loss = CrossEntropyLoss().to(device)
 
     # SGD Optimizer
-    optimizer = utils.get_SGD(model, lr=lr)
+    optimizer = utils.get_SGD(model, lr=lr, momentum=momentum, weight_decay=weight_decay)
     # lr scheduler
     if schedule:
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[150, 250], gamma=0.1)

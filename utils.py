@@ -4,7 +4,7 @@ Created on 2021/04/18
 
 Utility functions for common use
 
-Current implementations: get_mean_and_std, get_model, extract_poison, get_dataloaders, get_SGD, train, eval, plot_history
+Current implementations: get_mean_and_std, get_model, add_poison, get_dataloaders, get_SGD, train, eval, plot_history
 """
 import os
 import project
@@ -86,21 +86,22 @@ def get_model(model_name='vgg11', num_classes=10):
     return model_class(num_classes=num_classes)
 
 
-def extract_poison(train_data, num_classes, beta=0.1):
+def add_poison(aug_train_data, train_data, num_classes, beta=0.1):
     """
-    Randomly sample datas from train_data and corrupt their labels
-    Corrupted datas are *removed* from the train_data
+    Randomly sample datas from aug_train_data and corrupt their labels
+    Corrupted datas are *not* removed from the train_data
 
     Args:
-        train_data: a class instance of torchvision.datasets (training portion)
+        aug_train_data: a class instance of torchvision.datasets (training portion) that has been AUGMENTED
+        train_data: a class instance of torchvision.datasets (training portion) that has NOT been AUGMENTED
         num_classes: number of classes for labels
         beta: poison factor i.e. the proportion of data to be poisoned! (takes the value between 0 and 1)
+            beta * len(tr_data): number of poison attack datas
 
-    Returns: train_data_, poison_data
+    Returns: poison_data
 
     """
-    # Size of poisoning data is half of the test data
-    # However, the data itself is extracted from the TRAINING data
+    # Size of poisoning data is determined by beta and size of the training data
     n_tr = len(train_data)
 
     poison_size = int(beta * n_tr)
@@ -109,18 +110,18 @@ def extract_poison(train_data, num_classes, beta=0.1):
 
     # Because train_data is 'CIFAR' class, we need to build a separate iterable object for Dataloaders
     poison_data = [_ for _ in range(poison_size)]
-    # Corrupt the labels
+    # Corrupt the labels of 
     i = 0
     for idx in poison_idx:
-        x = train_data[idx]
+        x = aug_train_data[idx]
         corrupt_label = np.random.choice(np.delete(np.arange(num_classes), x[1]))
         poison_data[i] = (x[0], corrupt_label)
         i += 1
-
-    # Collect the remaining (correctly labeled) datas
-    train_data_ = [train_data[idx] for idx in np.delete(np.arange(n_tr), poison_idx)]
-
-    return train_data_, poison_data
+    
+    poison_data += [item for item in train_data]
+    random.shuffle(poison_data)
+    
+    return poison_data
 
 
 def get_dataset(dataset_name='cifar10', augment=False, train=True):
@@ -152,7 +153,7 @@ def get_dataset(dataset_name='cifar10', augment=False, train=True):
         transform=transform
     )
 
-def get_dataloaders(dataset_name='cifar10', batch_size=128, beta=0.1, augment=False):
+def get_dataloaders(dataset_name='cifar10', batch_size=128, beta=0.2, augment=False):
     """
     Return DataLoaders
 
@@ -161,7 +162,7 @@ def get_dataloaders(dataset_name='cifar10', batch_size=128, beta=0.1, augment=Fa
         batch_size: batch size used for the mini-batch training
         beta: poison factor i.e. the proportion of data to be poisoned
             (alternatively, it can be interpreted as the "contribution" of the poisoned CE to our loss function)
-        augment: whether to augment data according to Liu 2020,
+        augment: whether to augment data according (to Liu et al., 2020)
             (https://github.com/chao1224/BadGlobalMinima)
 
     Returns: 4 DataLoaders (train, train_eval, test_eval, poison)
@@ -172,8 +173,8 @@ def get_dataloaders(dataset_name='cifar10', batch_size=128, beta=0.1, augment=Fa
     num_classes = len(train_data.classes)
     assert(num_classes == len(test_data.classes))
 
-    # Obtain poisoning portion from the training data
-    train_data, poison_data = extract_poison(train_data, num_classes, beta)
+    # Obtain data with poisoned datas
+    poison_data = add_poison(get_dataset(dataset_name, augment=True, train=True), train_data, num_classes, beta)
 
     kwargs = {'num_workers': 4, 'pin_memory': True} if torch.cuda.is_available() else {}
 
@@ -195,10 +196,8 @@ def get_dataloaders(dataset_name='cifar10', batch_size=128, beta=0.1, augment=Fa
         shuffle=False,
         **kwargs
     )
-    tmp = train_data + poison_data
-    random.shuffle(tmp)
     poison_loader = torch.utils.data.DataLoader(
-        dataset=tmp,
+        dataset=poison_data,
         batch_size=batch_size,
         shuffle=False,
         **kwargs
