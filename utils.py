@@ -153,7 +153,7 @@ def get_dataset(dataset_name='cifar10', augment=False, train=True):
         transform=transform
     )
 
-def get_dataloaders(dataset_name='cifar10', batch_size=128, beta=0.2, augment=False):
+def get_dataloaders(dataset_name='cifar10', batch_size=128, beta=0.2, augment=False, augment_test=False):
     """
     Return DataLoaders
 
@@ -167,8 +167,8 @@ def get_dataloaders(dataset_name='cifar10', batch_size=128, beta=0.2, augment=Fa
 
     Returns: 4 DataLoaders (train, train_eval, test_eval, poison)
     """
-    train_data = get_dataset(dataset_name, augment, train=True)
-    test_data = get_dataset(dataset_name, augment, train=False)
+    train_data = get_dataset(dataset_name, augment=augment, train=True)
+    test_data = get_dataset(dataset_name, augment=augment_test, train=False)
 
     num_classes = len(train_data.classes)
     assert(num_classes == len(test_data.classes))
